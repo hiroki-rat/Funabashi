@@ -3,7 +3,6 @@ import datetime
 import importlib
 import os
 import queue
-import re
 import subprocess
 import sys
 import threading
@@ -413,14 +412,7 @@ class FunabashiBot:
         self._click_with_retry(By.XPATH, "//a[contains(text(), '軟式少年野球') or contains(text(), '軟式野球')]")
         self.click_image_by_alt("申込みの選択")
         
-    def navigate_to_replace_new_search(
-        self,
-        ground_name: str,
-        sub_facility: str,
-        target_date: str,
-        start_code: str,
-        end_code: str,
-    ):
+    def navigate_to_replace_new_search(self, ground_name: str, target_date: str):
         """【利用者差し替え用】入れ替え後（Chrome）の画面遷移"""
         self.click_image_by_alt("予約の申込み")
         self.click_image_by_alt("複合検索条件")
@@ -431,9 +423,6 @@ class FunabashiBot:
         self._click_with_retry(By.PARTIAL_LINK_TEXT, ground_name)
         self.select_replace_search_date(target_date)
         self.click_image_by_alt("検索を開始する")
-        self.select_replace_available_slot(
-            ground_name, sub_facility, target_date, start_code, end_code
-        )
 
     def navigate_to_replace_old_cancel(self):
         """利用者差し替え用に、入れ替え前アカウントの予約取消画面を開く。"""
@@ -471,89 +460,6 @@ class FunabashiBot:
                     raise ValueError(f"日付の選択肢「{value}」が見つかりませんでした。")
         except Exception as e:
             raise Exception(f"検索画面で日付 {year}年{month}月{day}日 を設定できませんでした。") from e
-
-    def select_replace_available_slot(
-        self,
-        ground_name: str,
-        sub_facility: str,
-        target_date: str,
-        start_code: str,
-        end_code: str,
-    ):
-        """指定の使用場所にある、希望時間帯を包含する空き枠を1件だけ選択する。"""
-        available_slot_xpath = (
-            "//a[.//img[@alt='空き'] "
-            f"and contains(@href, '{target_date}')]"
-        )
-        facility_name = sub_facility if sub_facility != "※詳細指定なし" else ground_name
-
-        try:
-            # 親テーブルの行ではなく、先頭セルが使用場所名の実データ行だけを対象にする。
-            facility_row_xpath = f"//tr[td[1][contains(normalize-space(.), '{facility_name}')]]"
-            facility_rows = self.wait.until(
-                EC.presence_of_all_elements_located((By.XPATH, facility_row_xpath))
-            )
-            found_links = [
-                link
-                for row in facility_rows
-                for link in row.find_elements(By.XPATH, "." + available_slot_xpath)
-            ]
-            available_links = list({link.id: link for link in found_links}.values())
-        except Exception as e:
-            raise Exception(f"施設・面「{facility_name}」の空き状況を確認できませんでした。") from e
-
-        def time_to_minutes(time_code: str) -> int:
-            hour, minute = divmod(int(time_code), 100)
-            if not (0 <= hour <= 23 and 0 <= minute < 60):
-                raise ValueError
-            return hour * 60 + minute
-
-        try:
-            requested_start = time_to_minutes(start_code)
-            requested_end = time_to_minutes(end_code)
-        except ValueError as e:
-            raise Exception("選択した時間帯を読み取れませんでした。") from e
-
-        candidates = []
-        for link in available_links:
-            href = link.get_attribute("href") or ""
-            date_index = href.rfind(target_date)
-            if date_index < 0:
-                continue
-
-            # 空きリンクは日付の後ろに「開始時刻, 分類値, 終了時刻, 分類値」を持つ。
-            time_codes = re.findall(r"(?<!\d)(\d{3,4})(?!\d)", href[date_index + len(target_date):])
-            if len(time_codes) < 2:
-                continue
-            try:
-                available_start = time_to_minutes(time_codes[0])
-                available_end = time_to_minutes(time_codes[1])
-            except ValueError:
-                continue
-
-            if available_start <= requested_start and requested_end <= available_end:
-                candidates.append(link)
-
-        candidates = list({link.id: link for link in candidates}.values())
-
-        if not candidates:
-            raise Exception(
-                f"{facility_name} の {target_date} {start_code}〜{end_code} を含む空き枠がありません。"
-            )
-        if len(candidates) > 1:
-            raise Exception(
-                f"{facility_name} の {target_date} {start_code}〜{end_code} に一致する空き枠が複数あります。"
-                "誤選択を防ぐため、手動で選択してください。"
-            )
-
-        self._check_stop()
-        slot = candidates[0]
-        try:
-            slot.click()
-            with contextlib.suppress(Exception):
-                WebDriverWait(self.driver, 1.5).until(EC.staleness_of(slot))
-        except Exception as e:
-            raise Exception("空き枠を選択できませんでした。") from e
 
     def select_ground(self, ground_name: str, sub_facility: str):
         self._click_with_retry(By.LINK_TEXT, ground_name)
@@ -1546,7 +1452,6 @@ class FunabashiApp:
 
         # 画面のUIから対象グラウンドを取得
         rep_ground = self.rep_ground_combo.get()
-        rep_sub = self.rep_sub_combo.get()
         y = self.rep_year_combo.get()
         m = self.rep_month_combo.get()
         d = self.rep_day_combo.get()
@@ -1556,38 +1461,18 @@ class FunabashiApp:
             messagebox.showerror("エラー", f"利用者差し替えの「{y}年{m}月{d}日」は存在しない日付です。")
             return
 
-        time_slots_dict = GROUND_TIME_SLOTS.get(rep_ground, GROUND_TIME_SLOTS["行田運動広場"])
-        rep_time_label = self.rep_time_combo.get()
-        try:
-            rep_start, rep_end = time_slots_dict[rep_time_label]
-        except KeyError:
-            messagebox.showerror("エラー", "利用者差し替えの時間帯を選択してください。")
-            return
-
         self.is_stopped = False
         self.is_running = True
         self._toggle_ui_state("disabled")
 
         thread = threading.Thread(
             target=self._worker_replace_thread,
-            args=(
-                old_id,
-                old_pw,
-                new_id,
-                new_pw,
-                rep_ground,
-                rep_sub,
-                rep_date,
-                rep_start,
-                rep_end,
-            ),
+            args=(old_id, old_pw, new_id, new_pw, rep_ground, rep_date),
             daemon=True,
         )
         thread.start()
 
-    def _worker_replace_thread(
-        self, old_id, old_pw, new_id, new_pw, rep_ground, rep_sub, rep_date, rep_start, rep_end
-    ):
+    def _worker_replace_thread(self, old_id, old_pw, new_id, new_pw, rep_ground, rep_date):
         self.append_log("🚀 利用者差し替え処理を開始します")
         self.root.after(0, self.create_stop_floating_window)
 
@@ -1631,12 +1516,8 @@ class FunabashiApp:
             
             # --- 画面遷移の実行 ---
             self.append_log(f"    画面遷移中（予約の申込み → 複合検索 → 利用目的 → 軟式野球 → 館の選択 → {rep_ground} → 検索開始）...")
-            bot_chrome.navigate_to_replace_new_search(
-                rep_ground, rep_sub, rep_date, rep_start, rep_end
-            )
-            self.append_log(
-                f"    ✅ 検索・空き枠選択まで完了（{rep_date[:4]}年{rep_date[4:6]}月{rep_date[6:]}日 {rep_start}〜{rep_end}）"
-            )
+            bot_chrome.navigate_to_replace_new_search(rep_ground, rep_date)
+            self.append_log(f"    ✅ 検索開始まで完了（{rep_date[:4]}年{rep_date[4:6]}月{rep_date[6:]}日）")
             # ----------------------------------------
 
             self.append_log("\n🎉 ブラウザの起動とログインが完了しました")
@@ -1650,7 +1531,7 @@ class FunabashiApp:
             if edge_driver:
                 with contextlib.suppress(Exception): edge_driver.quit()
             if chrome_driver:
-                self.append_log("ℹ️ Chromeはエラー確認のため開いたままにしています。")
+                with contextlib.suppress(Exception): chrome_driver.quit()
         finally:
             self.is_running = False
             self.root.after(0, lambda: self._toggle_ui_state("normal"))
