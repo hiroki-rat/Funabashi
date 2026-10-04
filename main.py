@@ -134,6 +134,7 @@ try:
     from selenium.webdriver.edge.service import Service as EdgeService
     from selenium.webdriver.chrome.service import Service as ChromeService
     from selenium.webdriver.support import expected_conditions as EC
+    from selenium.webdriver.support.select import Select
     from selenium.webdriver.support.ui import WebDriverWait
 except ImportError:
     pass
@@ -398,13 +399,47 @@ class FunabashiBot:
         self._click_with_retry(By.XPATH, "//a[contains(text(), '軟式少年野球') or contains(text(), '軟式野球')]")
         self.click_image_by_alt("申込みの選択")
         
-    def navigate_to_replace_new_search(self, ground_name: str):
+    def navigate_to_replace_new_search(self, ground_name: str, target_date: str):
         """【利用者差し替え用】入れ替え後（Chrome）の画面遷移"""
         self.click_image_by_alt("予約の申込み")
         self.click_image_by_alt("複合検索条件")
         self.click_image_by_alt("館の選択")
         # 部分一致でグラウンドを選択（表記ゆれにも対応）
         self._click_with_retry(By.PARTIAL_LINK_TEXT, ground_name)
+        self.select_replace_search_date(target_date)
+
+    def select_replace_search_date(self, target_date: str):
+        """利用者差し替え用の施設空き状況検索画面で年月日を設定する。"""
+        year, month, day = target_date[:4], target_date[4:6], target_date[6:8]
+        date_select_xpath = (
+            "//*[self::td or self::th][normalize-space()='年月日']"
+            "/following-sibling::*[1]//select"
+        )
+
+        try:
+            date_selects = WebDriverWait(self.driver, 10).until(
+                lambda driver: driver.find_elements(By.XPATH, date_select_xpath)
+            )
+            if len(date_selects) < 3:
+                raise ValueError("年月日プルダウンが見つかりませんでした。")
+
+            for dropdown, value in zip(date_selects[:3], (year, month, day)):
+                select = Select(dropdown)
+                candidate_values = (value, str(int(value)))
+                for candidate in candidate_values:
+                    try:
+                        select.select_by_value(candidate)
+                        break
+                    except Exception:
+                        try:
+                            select.select_by_visible_text(candidate)
+                            break
+                        except Exception:
+                            continue
+                else:
+                    raise ValueError(f"日付の選択肢「{value}」が見つかりませんでした。")
+        except Exception as e:
+            raise Exception(f"検索画面で日付 {year}年{month}月{day}日 を設定できませんでした。") from e
 
     def select_ground(self, ground_name: str, sub_facility: str):
         self._click_with_retry(By.LINK_TEXT, ground_name)
@@ -1395,21 +1430,29 @@ class FunabashiApp:
             messagebox.showwarning("警告", "現在処理が実行中です。")
             return
 
+        # 画面のUIから対象グラウンドを取得
+        rep_ground = self.rep_ground_combo.get()
+        y = self.rep_year_combo.get()
+        m = self.rep_month_combo.get()
+        d = self.rep_day_combo.get()
+        try:
+            rep_date = datetime.date(int(y), int(m), int(d)).strftime("%Y%m%d")
+        except ValueError:
+            messagebox.showerror("エラー", f"利用者差し替えの「{y}年{m}月{d}日」は存在しない日付です。")
+            return
+
         self.is_stopped = False
         self.is_running = True
         self._toggle_ui_state("disabled")
-        
-        # 画面のUIから対象グラウンドを取得
-        rep_ground = self.rep_ground_combo.get()
 
         thread = threading.Thread(
             target=self._worker_replace_thread,
-            args=(old_id, old_pw, new_id, new_pw, rep_ground),
+            args=(old_id, old_pw, new_id, new_pw, rep_ground, rep_date),
             daemon=True,
         )
         thread.start()
 
-    def _worker_replace_thread(self, old_id, old_pw, new_id, new_pw, rep_ground):
+    def _worker_replace_thread(self, old_id, old_pw, new_id, new_pw, rep_ground, rep_date):
         self.append_log("🚀 利用者差し替え処理を開始します")
         self.root.after(0, self.create_stop_floating_window)
 
@@ -1450,8 +1493,8 @@ class FunabashiApp:
             
             # --- 画面遷移の実行 ---
             self.append_log(f"    画面遷移中（予約の申込み → 複合検索 → 館の選択 → {rep_ground}）...")
-            bot_chrome.navigate_to_replace_new_search(rep_ground)
-            self.append_log("    ✅ 画面遷移完了")
+            bot_chrome.navigate_to_replace_new_search(rep_ground, rep_date)
+            self.append_log(f"    ✅ 画面遷移・日付設定完了（{rep_date[:4]}年{rep_date[4:6]}月{rep_date[6:]}日）")
             # ----------------------------------------
 
             self.append_log("\n🎉 ブラウザの起動とログインが完了しました")
