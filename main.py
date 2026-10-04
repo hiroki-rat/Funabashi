@@ -413,7 +413,7 @@ class FunabashiBot:
         self.click_image_by_alt("申込みの選択")
         
     def navigate_to_replace_new_search(self, ground_name: str, target_date: str):
-        """【利用者差し替え用】入れ替え後（Chrome）の画面遷移"""
+        """【利用者差し替え用】差し替え後（Chrome）の画面遷移"""
         self.click_image_by_alt("予約の申込み")
         self.click_image_by_alt("複合検索条件")
         self.click_image_by_alt("利用目的の選択")
@@ -425,7 +425,7 @@ class FunabashiBot:
         self.click_image_by_alt("検索を開始する")
 
     def navigate_to_replace_old_cancel(self):
-        """利用者差し替え用に、入れ替え前アカウントの予約取消画面を開く。"""
+        """利用者差し替え用に、差し替え前アカウントの予約取消画面を開く。"""
         self.click_image_by_alt("予約の取消")
 
     def select_replace_search_date(self, target_date: str):
@@ -937,8 +937,8 @@ class FunabashiApp:
         frame_replace_ids = tk.Frame(frame_replace)
         frame_replace_ids.pack(fill=tk.X, pady=2)
 
-        # 入れ替え前
-        tk.Label(frame_replace_ids, text="入れ替え前 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
+        # 差し替え前
+        tk.Label(frame_replace_ids, text="差し替え前 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
         self.old_id_entry = tk.Entry(frame_replace_ids, width=12, font=("Arial", 9))
         self.old_id_entry.pack(side=tk.LEFT, padx=2)
         tk.Label(frame_replace_ids, text="PW:", font=("Arial", 9)).pack(side=tk.LEFT)
@@ -946,8 +946,8 @@ class FunabashiApp:
         self.old_pw_entry.insert(0, "000000")
         self.old_pw_entry.pack(side=tk.LEFT, padx=(2, 15))
 
-        # 入れ替え後
-        tk.Label(frame_replace_ids, text="入れ替え後 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
+        # 差し替え後
+        tk.Label(frame_replace_ids, text="差し替え後 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
         self.new_id_entry = tk.Entry(frame_replace_ids, width=12, font=("Arial", 9))
         self.new_id_entry.pack(side=tk.LEFT, padx=2)
         tk.Label(frame_replace_ids, text="PW:", font=("Arial", 9)).pack(side=tk.LEFT)
@@ -966,9 +966,6 @@ class FunabashiApp:
         self.rep_ground_combo.set("行田運動広場")
         self.rep_ground_combo.pack(side=tk.LEFT, padx=2)
 
-        self.rep_sub_combo = ttk.Combobox(row_frame_rep, state="readonly", width=SUB_FACILITY_COMBO_WIDTH)
-        self.rep_sub_combo.pack(side=tk.LEFT, padx=2)
-
         tk.Label(row_frame_rep, text="日:", font=("Arial", 9)).pack(side=tk.LEFT, padx=(5, 1))
 
         self.rep_year_combo = ttk.Combobox(row_frame_rep, values=YEAR_OPTIONS, state="readonly", width=6)
@@ -986,13 +983,6 @@ class FunabashiApp:
         self.rep_day_combo.pack(side=tk.LEFT, padx=1)
         tk.Label(row_frame_rep, text="日", font=("Arial", 9)).pack(side=tk.LEFT)
 
-        tk.Label(row_frame_rep, text="時:", font=("Arial", 9)).pack(side=tk.LEFT, padx=(5, 1))
-        self.rep_time_combo = ttk.Combobox(row_frame_rep, state="readonly", width=12)
-        self.rep_time_combo.pack(side=tk.LEFT, padx=2)
-
-        self.rep_ground_combo.bind("<<ComboboxSelected>>", self._on_rep_ground_combo_change)
-        self._on_rep_ground_combo_change(None)
-
         frame_rep_btn = tk.Frame(frame_replace)
         frame_rep_btn.pack(pady=(6, 3))
         self.replace_btn = tk.Button(
@@ -1005,20 +995,6 @@ class FunabashiApp:
             width=20,
         )
         self.replace_btn.pack()
-
-    def _on_rep_ground_combo_change(self, event):
-        chosen_ground = self.rep_ground_combo.get()
-        sub_options = SUB_FACILITIES.get(chosen_ground, ["※詳細指定なし"])
-        self.rep_sub_combo["values"] = sub_options
-        self.rep_sub_combo.current(0)
-        if chosen_ground in SUB_FACILITIES:
-            self.rep_sub_combo.config(state="readonly")
-        else:
-            self.rep_sub_combo.config(state="disabled")
-
-        time_slots_dict = GROUND_TIME_SLOTS.get(chosen_ground, GROUND_TIME_SLOTS["行田運動広場"])
-        self.rep_time_combo["values"] = list(time_slots_dict.keys())
-        self.rep_time_combo.current(0)
 
     def _on_window_close(self):
         if self.is_running:
@@ -1369,8 +1345,6 @@ class FunabashiApp:
         self.rep_year_combo.config(state="readonly")
         self.rep_month_combo.config(state="readonly")
         self.rep_day_combo.config(state="readonly")
-        self.rep_time_combo.config(state="readonly")
-        self._on_rep_ground_combo_change(None)
 
     def start_apply_process(self):
         requests_list = []
@@ -1443,7 +1417,7 @@ class FunabashiApp:
         new_pw = self.new_pw_entry.get().strip()
 
         if not old_id or not new_id:
-            messagebox.showwarning("警告", "入れ替え前・入れ替え後のIDを両方入力してください。")
+            messagebox.showwarning("警告", "差し替え前・差し替え後のIDを両方入力してください。")
             return
 
         if self.is_running:
@@ -1480,8 +1454,8 @@ class FunabashiApp:
         chrome_driver = None
 
         try:
-            # --- Edge (入れ替え前) ---
-            self.append_log("起動中: Edge (入れ替え前アカウント)")
+            # --- Edge (差し替え前) ---
+            self.append_log("起動中: Edge (差し替え前アカウント)")
             edge_options = webdriver.EdgeOptions()
             edge_options.add_experimental_option("detach", True)
             edge_service = EdgeService()
@@ -1499,8 +1473,8 @@ class FunabashiApp:
             self.append_log("    ✅ 予約の取消画面へ移動完了")
             time.sleep(1)
 
-            # --- Chrome (入れ替え後) ---
-            self.append_log("起動中: Chrome (入れ替え後アカウント)")
+            # --- Chrome (差し替え後) ---
+            self.append_log("起動中: Chrome (差し替え後アカウント)")
             chrome_options = webdriver.ChromeOptions()
             chrome_options.add_experimental_option("detach", True)
             chrome_service = ChromeService()
