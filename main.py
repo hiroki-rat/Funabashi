@@ -488,15 +488,17 @@ class FunabashiBot:
         facility_name = sub_facility if sub_facility != "※詳細指定なし" else ground_name
 
         try:
-            facility_row_xpath = f"//tr[contains(normalize-space(.), '{facility_name}')]"
+            # 親テーブルの行ではなく、先頭セルが使用場所名の実データ行だけを対象にする。
+            facility_row_xpath = f"//tr[td[1][contains(normalize-space(.), '{facility_name}')]]"
             facility_rows = self.wait.until(
                 EC.presence_of_all_elements_located((By.XPATH, facility_row_xpath))
             )
-            available_links = [
+            found_links = [
                 link
                 for row in facility_rows
                 for link in row.find_elements(By.XPATH, "." + available_slot_xpath)
             ]
+            available_links = list({link.id: link for link in found_links}.values())
         except Exception as e:
             raise Exception(f"施設・面「{facility_name}」の空き状況を確認できませんでした。") from e
 
@@ -531,6 +533,8 @@ class FunabashiBot:
 
             if available_start <= requested_start and requested_end <= available_end:
                 candidates.append(link)
+
+        candidates = list({link.id: link for link in candidates}.values())
 
         if not candidates:
             raise Exception(
