@@ -416,6 +416,8 @@ class FunabashiBot:
         """【利用者差し替え用】入れ替え後（Chrome）の画面遷移"""
         self.click_image_by_alt("予約の申込み")
         self.click_image_by_alt("複合検索条件")
+        self.click_image_by_alt("利用目的の選択")
+        self._click_with_retry(By.LINK_TEXT, "軟式野球")
         self.click_image_by_alt("館の選択")
         # 部分一致でグラウンドを選択（表記ゆれにも対応）
         self._click_with_retry(By.PARTIAL_LINK_TEXT, ground_name)
@@ -1513,7 +1515,7 @@ class FunabashiApp:
             self.append_log(f"✅ Chromeログイン完了: {new_id}")
             
             # --- 画面遷移の実行 ---
-            self.append_log(f"    画面遷移中（予約の申込み → 複合検索 → 館の選択 → {rep_ground} → 検索開始）...")
+            self.append_log(f"    画面遷移中（予約の申込み → 複合検索 → 利用目的 → 軟式野球 → 館の選択 → {rep_ground} → 検索開始）...")
             bot_chrome.navigate_to_replace_new_search(rep_ground, rep_date)
             self.append_log(f"    ✅ 検索開始まで完了（{rep_date[:4]}年{rep_date[4:6]}月{rep_date[6:]}日）")
             # ----------------------------------------
