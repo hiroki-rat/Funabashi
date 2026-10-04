@@ -3,6 +3,7 @@ import datetime
 import importlib
 import os
 import queue
+import re
 import subprocess
 import sys
 import threading
@@ -479,12 +480,10 @@ class FunabashiBot:
         start_code: str,
         end_code: str,
     ):
-        """検索結果から、指定条件に一致する空き枠を1件だけ選択する。"""
+        """指定の使用場所にある、希望時間帯を包含する空き枠を1件だけ選択する。"""
         available_slot_xpath = (
             "//a[.//img[@alt='空き'] "
-            f"and contains(@href, '{target_date}') "
-            f"and contains(@href, ', {start_code},') "
-            f"and contains(@href, ', {end_code},')]"
+            f"and contains(@href, '{target_date}')]"
         )
         facility_name = sub_facility if sub_facility != "※詳細指定なし" else ground_name
 
@@ -493,7 +492,7 @@ class FunabashiBot:
             facility_rows = self.wait.until(
                 EC.presence_of_all_elements_located((By.XPATH, facility_row_xpath))
             )
-            candidates = [
+            available_links = [
                 link
                 for row in facility_rows
                 for link in row.find_elements(By.XPATH, "." + available_slot_xpath)
@@ -501,9 +500,41 @@ class FunabashiBot:
         except Exception as e:
             raise Exception(f"施設・面「{facility_name}」の空き状況を確認できませんでした。") from e
 
+        def time_to_minutes(time_code: str) -> int:
+            hour, minute = divmod(int(time_code), 100)
+            if not (0 <= hour <= 23 and 0 <= minute < 60):
+                raise ValueError
+            return hour * 60 + minute
+
+        try:
+            requested_start = time_to_minutes(start_code)
+            requested_end = time_to_minutes(end_code)
+        except ValueError as e:
+            raise Exception("選択した時間帯を読み取れませんでした。") from e
+
+        candidates = []
+        for link in available_links:
+            href = link.get_attribute("href") or ""
+            date_index = href.rfind(target_date)
+            if date_index < 0:
+                continue
+
+            # 空きリンクは日付の後ろに「開始時刻, 分類値, 終了時刻, 分類値」を持つ。
+            time_codes = re.findall(r"(?<!\d)(\d{3,4})(?!\d)", href[date_index + len(target_date):])
+            if len(time_codes) < 2:
+                continue
+            try:
+                available_start = time_to_minutes(time_codes[0])
+                available_end = time_to_minutes(time_codes[1])
+            except ValueError:
+                continue
+
+            if available_start <= requested_start and requested_end <= available_end:
+                candidates.append(link)
+
         if not candidates:
             raise Exception(
-                f"{facility_name} の {target_date} {start_code}〜{end_code} に空き枠がありません。"
+                f"{facility_name} の {target_date} {start_code}〜{end_code} を含む空き枠がありません。"
             )
         if len(candidates) > 1:
             raise Exception(
