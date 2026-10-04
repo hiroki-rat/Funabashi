@@ -238,10 +238,12 @@ GROUND_TIME_SLOTS = {
 }
 
 TODAY = datetime.date.today()
-YEAR_OPTIONS = [str(y) for y in range(TODAY.year, TODAY.year + 3)]
+# 起動年から100年先まで選べるようにし、毎年の起動時に候補を更新する。
+YEAR_OPTIONS = [str(y) for y in range(TODAY.year, TODAY.year + 101)]
 MONTH_OPTIONS = [str(m).zfill(2) for m in range(1, 13)]
 DAY_OPTIONS = [str(d).zfill(2) for d in range(1, 32)]
 
+# 抽選申し込みの初期値は翌々月1日。
 _def_month = TODAY.month + 2
 _def_year = TODAY.year
 if _def_month > 12:
@@ -251,6 +253,17 @@ if _def_month > 12:
 DEFAULT_YEAR_STR = str(_def_year)
 DEFAULT_MONTH_STR = str(_def_month).zfill(2)
 DEFAULT_DAY_STR = "01"
+
+# 利用者差し替えの初期値は翌月1日（抽選申し込みとは独立）。
+_replace_def_month = TODAY.month + 1
+_replace_def_year = TODAY.year
+if _replace_def_month > 12:
+    _replace_def_month -= 12
+    _replace_def_year += 1
+
+REPLACE_DEFAULT_YEAR_STR = str(_replace_def_year)
+REPLACE_DEFAULT_MONTH_STR = str(_replace_def_month).zfill(2)
+REPLACE_DEFAULT_DAY_STR = "01"
 
 
 def get_real_desktop_path() -> str:
@@ -952,17 +965,17 @@ class FunabashiApp:
         tk.Label(row_frame_rep, text="日:", font=("Arial", 9)).pack(side=tk.LEFT, padx=(5, 1))
 
         self.rep_year_combo = ttk.Combobox(row_frame_rep, values=YEAR_OPTIONS, state="readonly", width=6)
-        self.rep_year_combo.set(DEFAULT_YEAR_STR)
+        self.rep_year_combo.set(REPLACE_DEFAULT_YEAR_STR)
         self.rep_year_combo.pack(side=tk.LEFT, padx=1)
         tk.Label(row_frame_rep, text="年", font=("Arial", 9)).pack(side=tk.LEFT)
 
         self.rep_month_combo = ttk.Combobox(row_frame_rep, values=MONTH_OPTIONS, state="readonly", width=4)
-        self.rep_month_combo.set(DEFAULT_MONTH_STR)
+        self.rep_month_combo.set(REPLACE_DEFAULT_MONTH_STR)
         self.rep_month_combo.pack(side=tk.LEFT, padx=1)
         tk.Label(row_frame_rep, text="月", font=("Arial", 9)).pack(side=tk.LEFT)
 
         self.rep_day_combo = ttk.Combobox(row_frame_rep, values=DAY_OPTIONS, state="readonly", width=4)
-        self.rep_day_combo.set(DEFAULT_DAY_STR)
+        self.rep_day_combo.set(REPLACE_DEFAULT_DAY_STR)
         self.rep_day_combo.pack(side=tk.LEFT, padx=1)
         tk.Label(row_frame_rep, text="日", font=("Arial", 9)).pack(side=tk.LEFT)
 
