@@ -649,7 +649,8 @@ class FunabashiApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("船橋市施設予約 抽選申込自動化ツール")
-        self.root.geometry("1000x880")
+        self.root.geometry("1120x700")
+        self.root.minsize(1080, 620)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -823,11 +824,15 @@ class FunabashiApp:
         )
         chk_slow.pack(side=tk.LEFT, padx=15)
 
-        # 4. 抽選申し込み 枠
+        # 4. 抽選申し込み・その他 枠
+        frame_actions = tk.Frame(self.scrollable_frame)
+        frame_actions.pack(fill=tk.X, padx=15, pady=4)
+        frame_actions.grid_columnconfigure(0, weight=1)
+
         frame_requests = tk.LabelFrame(
-            self.scrollable_frame, text="抽選申し込み", font=("Arial", 10, "bold"), padx=15, pady=5
+            frame_actions, text="抽選申し込み", font=("Arial", 10, "bold"), padx=15, pady=5
         )
-        frame_requests.pack(fill=tk.X, padx=15, pady=4)
+        frame_requests.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
 
         frame_config = tk.Frame(frame_requests)
         frame_config.pack(fill=tk.X, pady=(0, 4))
@@ -899,23 +904,12 @@ class FunabashiApp:
 
         # 5. その他 枠
         frame_others = tk.LabelFrame(
-            self.scrollable_frame, text="その他", font=("Arial", 10, "bold"), padx=15, pady=6
+            frame_actions, text="その他", font=("Arial", 10, "bold"), padx=15, pady=6
         )
-        frame_others.pack(fill=tk.X, padx=15, pady=(3, 5))
+        frame_others.grid(row=0, column=1, sticky="ns")
 
         frame_others_btns = tk.Frame(frame_others)
-        frame_others_btns.pack()
-
-        self.result_btn = tk.Button(
-            frame_others_btns,
-            text="抽選結果確認実行",
-            command=self.start_result_check_process,
-            bg="#28a745",
-            fg="white",
-            font=("Arial", 12, "bold"),
-            width=20,
-        )
-        self.result_btn.pack(side=tk.LEFT, padx=10)
+        frame_others_btns.pack(fill=tk.Y, padx=4, pady=4)
 
         self.cancel_btn = tk.Button(
             frame_others_btns,
@@ -926,7 +920,18 @@ class FunabashiApp:
             font=("Arial", 12, "bold"),
             width=20,
         )
-        self.cancel_btn.pack(side=tk.LEFT, padx=10)
+        self.cancel_btn.pack(pady=(4, 14))
+
+        self.result_btn = tk.Button(
+            frame_others_btns,
+            text="抽選結果確認実行",
+            command=self.start_result_check_process,
+            bg="#28a745",
+            fg="white",
+            font=("Arial", 12, "bold"),
+            width=20,
+        )
+        self.result_btn.pack(pady=4)
 
         # 6. 利用者差し替え 枠
         frame_replace = tk.LabelFrame(
@@ -934,8 +939,11 @@ class FunabashiApp:
         )
         frame_replace.pack(fill=tk.X, padx=15, pady=(0, 10))
 
-        frame_replace_ids = tk.Frame(frame_replace)
-        frame_replace_ids.pack(fill=tk.X, pady=2)
+        frame_replace_content = tk.Frame(frame_replace)
+        frame_replace_content.pack(fill=tk.X, pady=2)
+
+        frame_replace_ids = tk.Frame(frame_replace_content)
+        frame_replace_ids.pack(side=tk.LEFT, padx=(0, 12))
 
         # 差し替え前
         tk.Label(frame_replace_ids, text="差し替え前 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
@@ -956,8 +964,8 @@ class FunabashiApp:
         self.new_pw_entry.pack(side=tk.LEFT, padx=2)
 
         # 対象グラウンド・日時選択枠
-        row_frame_rep = tk.Frame(frame_replace)
-        row_frame_rep.pack(fill=tk.X, pady=4)
+        row_frame_rep = tk.Frame(frame_replace_content)
+        row_frame_rep.pack(side=tk.LEFT, padx=(0, 12))
         tk.Label(row_frame_rep, text="対象:", font=("Arial", 9, "bold"), width=5, anchor="w").pack(side=tk.LEFT)
 
         self.rep_ground_combo = ttk.Combobox(
@@ -983,8 +991,8 @@ class FunabashiApp:
         self.rep_day_combo.pack(side=tk.LEFT, padx=1)
         tk.Label(row_frame_rep, text="日", font=("Arial", 9)).pack(side=tk.LEFT)
 
-        frame_rep_btn = tk.Frame(frame_replace)
-        frame_rep_btn.pack(pady=(6, 3))
+        frame_rep_btn = tk.Frame(frame_replace_content)
+        frame_rep_btn.pack(side=tk.RIGHT, padx=(8, 0))
         self.replace_btn = tk.Button(
             frame_rep_btn,
             text="利用者差し替え実行",
