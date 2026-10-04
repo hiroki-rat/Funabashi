@@ -1615,7 +1615,7 @@ class FunabashiApp:
             if edge_driver:
                 with contextlib.suppress(Exception): edge_driver.quit()
             if chrome_driver:
-                with contextlib.suppress(Exception): chrome_driver.quit()
+                self.append_log("ℹ️ Chromeはエラー確認のため開いたままにしています。")
         finally:
             self.is_running = False
             self.root.after(0, lambda: self._toggle_ui_state("normal"))
