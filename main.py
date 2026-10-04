@@ -132,10 +132,11 @@ try:
     from selenium.webdriver.common.by import By
     from selenium.webdriver.common.keys import Keys
     from selenium.webdriver.edge.service import Service as EdgeService
+    from selenium.webdriver.chrome.service import Service as ChromeService
     from selenium.webdriver.support import expected_conditions as EC
     from selenium.webdriver.support.ui import WebDriverWait
 except ImportError:
-    pass # 上記のチェック機能でカバーするためパス
+    pass
 
 # ==========================================
 # 定数・マスタデータ定義
@@ -165,6 +166,11 @@ ALL_GROUNDS = [
     "大神保町まちかどスポーツ広場",
     "ふなばし三番瀬海浜公園",
 ]
+
+GROUND_COMBO_WIDTH = max(len(name) for name in ALL_GROUNDS) * 2
+SUB_FACILITY_COMBO_WIDTH = max(
+    len(name) for names in SUB_FACILITIES.values() for name in names
+) * 2
 
 GROUND_TIME_SLOTS = {
     "行田運動広場": {
@@ -247,7 +253,6 @@ DEFAULT_DAY_STR = "01"
 
 
 def get_real_desktop_path() -> str:
-    """Windowsの実際のデスクトップパスを取得"""
     try:
         key = winreg.OpenKey(
             winreg.HKEY_CURRENT_USER,
@@ -269,7 +274,6 @@ def get_real_desktop_path() -> str:
 
 
 def clean_exception_msg(e: Exception) -> str:
-    """内部スタックトレースを切り捨てて短いメッセージにする"""
     msg = str(e).split("\n")[0]
     if "Stacktrace:" in msg or "msedgedriver" in msg:
         return "画面要素の読み込みに失敗したか、ブラウザ通信が中断されました。"
@@ -338,7 +342,6 @@ class FunabashiBot:
         self._click_with_retry(By.XPATH, xpath)
 
     def take_screenshot(self, id_index: int, user_id: str, suffix: str, wait_sec: float = 0.5, zoom: str = None):
-        """【共通拡大率対応】スクリーンショット撮影処理"""
         if not self.output_folder:
             return
 
@@ -368,7 +371,6 @@ class FunabashiBot:
         self.click_image_by_alt("ログイン")
 
     def logout(self, user_id: str):
-        """【高速・共通化改修】待機時間なしで安全・確実にログアウトする"""
         for _ in range(2):
             try:
                 btns = self.driver.find_elements(
@@ -395,6 +397,14 @@ class FunabashiBot:
         self.click_image_by_alt("利用目的から")
         self._click_with_retry(By.XPATH, "//a[contains(text(), '軟式少年野球') or contains(text(), '軟式野球')]")
         self.click_image_by_alt("申込みの選択")
+        
+    def navigate_to_replace_new_search(self, ground_name: str):
+        """【利用者差し替え用】入れ替え後（Chrome）の画面遷移"""
+        self.click_image_by_alt("予約の申込み")
+        self.click_image_by_alt("複合検索条件")
+        self.click_image_by_alt("館の選択")
+        # 部分一致でグラウンドを選択（表記ゆれにも対応）
+        self._click_with_retry(By.PARTIAL_LINK_TEXT, ground_name)
 
     def select_ground(self, ground_name: str, sub_facility: str):
         self._click_with_retry(By.LINK_TEXT, ground_name)
@@ -430,18 +440,15 @@ class FunabashiBot:
         except Exception:
             self._click_with_retry(By.XPATH, f"(//input[@value='申込み'])[{request_index}]", wait_for_stale=False)
 
-        # 1. ポップアップ（アラート）の自動承認
         with contextlib.suppress(TimeoutException, NoAlertPresentException, UnexpectedAlertPresentException):
             WebDriverWait(self.driver, 2).until(EC.alert_is_present())
             self.driver.switch_to.alert.accept()
 
         time.sleep(0.5)
 
-        # 2. 第4希望の時のスクショ撮影（「送信しない」を押す前に実行）
         if request_index == 4:
             self.take_screenshot(id_index, user_id, "申し込み", wait_sec=0.5)
 
-        # 3. 「送信しない」ボタンの有無判定とクリック
         pressed_no_mail = False
         with contextlib.suppress(Exception):
             no_mail_btns = self.driver.find_elements(
@@ -467,7 +474,6 @@ class FunabashiBot:
                 self.click_image_by_alt("メニューへ", extra_xpath="or contains(@src, 'bw_menu')")
 
     def confirm_win_if_present(self):
-        """当選時（「選択」ボタンが存在する場合）のみ自動確定作業を行う"""
         try:
             select_btns = self.driver.find_elements(
                 By.XPATH, "//img[@alt='選択' or contains(@src, 'bw_selectmaru')]"
@@ -493,7 +499,6 @@ class FunabashiBot:
                     WebDriverWait(self.driver, 2).until(EC.alert_is_present())
                     self.driver.switch_to.alert.accept()
 
-                # 自動確定完了後に「終了」ボタンがあればクリックして戻る
                 time.sleep(0.5)
                 with contextlib.suppress(Exception):
                     self.click_image_by_alt("終了", extra_xpath="or contains(@src, 'bw_end')")
@@ -503,7 +508,6 @@ class FunabashiBot:
             pass
 
     def run_single_id_apply(self, user_id: str, password: str, requests_list: list, num_people: str, id_index: int = 1):
-        """【機能1】抽選申し込みを一巡実行"""
         self._check_stop()
         self.login(user_id, password)
 
@@ -525,7 +529,6 @@ class FunabashiBot:
             self.log(f"    ✔ 第{idx}希望 申込完了")
 
     def run_single_id_result(self, user_id: str, password: str, id_index: int = 1):
-        """【機能2】抽選結果確認を一巡実行（高速化版）"""
         self._check_stop()
         self.login(user_id, password)
 
@@ -544,7 +547,6 @@ class FunabashiBot:
         self.logout(user_id)
 
     def run_single_id_cancel(self, user_id: str, password: str, id_index: int = 1):
-        """【機能3】抽選申込みの取消を一巡実行"""
         self._check_stop()
         self.login(user_id, password)
 
@@ -565,13 +567,11 @@ class FunabashiBot:
 
             self.click_image_by_alt("取消")
 
-            # 確認ポップアップを承認
             with contextlib.suppress(TimeoutException, NoAlertPresentException, UnexpectedAlertPresentException):
                 WebDriverWait(self.driver, 2).until(EC.alert_is_present())
                 self.driver.switch_to.alert.accept()
                 time.sleep(0.5)
 
-            # 画像14fe01e7対応: 「送信しない」ボタンがあればクリックする
             with contextlib.suppress(Exception):
                 no_mail_btns = self.driver.find_elements(
                     By.XPATH, "//img[@alt='送信しない' or contains(@src, 'bw_notransmitmail')]"
@@ -582,7 +582,6 @@ class FunabashiBot:
                         time.sleep(0.5)
                         break
 
-            # 画像517b26c9対応: 「終了」ボタンのクリック
             self.click_image_by_alt("終了", extra_xpath="or contains(@src, 'bw_end')")
 
         self.logout(user_id)
@@ -597,7 +596,6 @@ class FunabashiApp:
         self.root.title("船橋市施設予約 抽選申込自動化ツール")
         self.root.geometry("1000x880")
 
-        # 【追加機能2】 ×ボタン押下時の安全終了フックを追加
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
         self.driver = None
@@ -605,7 +603,6 @@ class FunabashiApp:
         self.stop_win = None
         self.is_running = False
 
-        # 【追加機能3】 ログ管理用のキューと上限行数設定
         self.log_queue = queue.Queue()
         self.max_log_lines = 1000
 
@@ -620,7 +617,6 @@ class FunabashiApp:
 
         self._build_ui()
 
-        # ログ定期更新の開始
         self.root.after(100, self._check_log_queue)
 
     def _build_ui(self):
@@ -635,9 +631,7 @@ class FunabashiApp:
         self.main_window_id = self.main_canvas.create_window((0, 0), window=self.scrollable_frame, anchor="nw")
 
         def _on_main_canvas_configure(event):
-            # 横幅をキャンバス全体に広げる
             self.main_canvas.itemconfig(self.main_window_id, width=event.width)
-            # キャンバスの高さがフレームより大きい場合、高さをキャンバスに合わせて中央寄せ（上の余白）を防ぐ
             if event.height > self.scrollable_frame.winfo_reqheight():
                 self.main_canvas.itemconfig(self.main_window_id, height=event.height)
             else:
@@ -647,12 +641,8 @@ class FunabashiApp:
 
         self.main_canvas.configure(yscrollcommand=self.main_scrollbar.set)
 
-        # 先にスクロールバーを配置する
         self.main_scrollbar.pack(side="right", fill="y")
         self.main_canvas.pack(side="left", fill="both", expand=True)
-
-        self.main_canvas.bind("<Enter>", lambda e: self.main_canvas.bind_all("<MouseWheel>", self._on_mousewheel))
-        self.main_canvas.bind("<Leave>", lambda e: self.main_canvas.unbind_all("<MouseWheel>"))
 
         # 1. ヘッダーエリア
         frame_top_all = tk.Frame(self.scrollable_frame)
@@ -663,10 +653,17 @@ class FunabashiApp:
         tk.Label(frame_paste, text="ID一括貼り付け:", font=("Arial", 10, "bold")).pack(side=tk.LEFT)
         self.paste_entry = tk.Entry(frame_paste, width=22)
         self.paste_entry.pack(side=tk.LEFT, padx=5)
+        self.paste_entry.bind("<Button-3>", self.show_paste_context_menu)
+        self.paste_context_menu = tk.Menu(self.root, tearoff=False)
+        self.paste_context_menu.add_command(label="貼り付け", command=self.paste_from_context_menu)
         reflect_btn = tk.Button(
             frame_paste, text="一括反映", command=self.reflect_ids, bg="#32cd32", fg="white", font=("Arial", 9, "bold")
         )
         reflect_btn.pack(side=tk.LEFT, padx=2)
+        tk.Button(
+            frame_paste, text="クリア", command=self.clear_paste_entry,
+            bg="#6c757d", fg="white", font=("Arial", 9, "bold")
+        ).pack(side=tk.LEFT, padx=2)
 
         frame_sub_btns = tk.Frame(frame_top_all)
         frame_sub_btns.pack(side=tk.LEFT, padx=20)
@@ -694,6 +691,10 @@ class FunabashiApp:
             frame_id_header, text="＋ 行追加", command=self.add_id_row, bg="#4682b4", fg="white", font=("Arial", 8, "bold")
         )
         add_btn.pack(side=tk.RIGHT, padx=5)
+        tk.Button(
+            frame_id_header, text="クリア", command=self.clear_login_info,
+            bg="#6c757d", fg="white", font=("Arial", 8, "bold")
+        ).pack(side=tk.RIGHT, padx=2)
 
         id_scroll_frame = tk.Frame(frame_left_ids)
         id_scroll_frame.pack(fill=tk.BOTH, expand=True, pady=1)
@@ -710,10 +711,7 @@ class FunabashiApp:
 
         def _on_id_canvas_configure(event):
             self.id_canvas.itemconfig(self.id_window_id, width=event.width)
-            if event.height > self.id_container_frame.winfo_reqheight():
-                self.id_canvas.itemconfig(self.id_window_id, height=event.height)
-            else:
-                self.id_canvas.itemconfig(self.id_window_id, height="")
+            self._refresh_id_scrollregion()
 
         self.id_canvas.bind("<Configure>", _on_id_canvas_configure)
 
@@ -721,9 +719,11 @@ class FunabashiApp:
 
         self.id_scrollbar.pack(side="right", fill="y")
         self.id_canvas.pack(side="left", fill="both", expand=True)
+        self.id_canvas.bind("<MouseWheel>", self._on_id_mousewheel)
+        self.id_container_frame.bind("<MouseWheel>", self._on_id_mousewheel)
+        self.id_scrollbar.bind("<MouseWheel>", self._on_id_mousewheel)
 
-        self.id_canvas.bind("<Enter>", lambda e: self.id_canvas.bind_all("<MouseWheel>", self._on_id_mousewheel))
-        self.id_canvas.bind("<Leave>", lambda e: self.main_canvas.bind_all("<MouseWheel>", self._on_mousewheel))
+        self.root.bind_all("<MouseWheel>", self._on_global_mousewheel)
 
         for _ in range(5):
             self.add_id_row()
@@ -737,13 +737,12 @@ class FunabashiApp:
 
         ttk.Separator(self.scrollable_frame, orient="horizontal").pack(fill=tk.X, padx=10, pady=3)
 
-        # 3. 動作設定 枠 (横1行に配置)
+        # 3. 動作設定 枠
         frame_options = tk.LabelFrame(
             self.scrollable_frame, text="動作設定", font=("Arial", 10, "bold"), padx=15, pady=4
         )
         frame_options.pack(fill=tk.X, padx=15, pady=3)
 
-        # 横に並べるためのフレーム
         frame_options_row = tk.Frame(frame_options)
         frame_options_row.pack(fill=tk.X, anchor="w", pady=1)
 
@@ -790,12 +789,14 @@ class FunabashiApp:
             row_frame.pack(fill=tk.X, pady=1)
             tk.Label(row_frame, text=f"第{i+1}希望:", font=("Arial", 9, "bold"), width=7, anchor="w").pack(side=tk.LEFT)
 
-            g_combo = ttk.Combobox(row_frame, values=ALL_GROUNDS, state="readonly", width=20)
+            g_combo = ttk.Combobox(
+                row_frame, values=ALL_GROUNDS, state="readonly", width=GROUND_COMBO_WIDTH
+            )
             g_combo.set("行田運動広場")
             g_combo.pack(side=tk.LEFT, padx=2)
             self.ground_combos.append(g_combo)
 
-            s_combo = ttk.Combobox(row_frame, state="readonly", width=15)
+            s_combo = ttk.Combobox(row_frame, state="readonly", width=SUB_FACILITY_COMBO_WIDTH)
             s_combo.pack(side=tk.LEFT, padx=2)
             self.sub_combos.append(s_combo)
 
@@ -841,13 +842,12 @@ class FunabashiApp:
         )
         self.submit_btn.pack()
 
-        # 5. その他 枠 (緑と赤のボタンをまとめる)
+        # 5. その他 枠
         frame_others = tk.LabelFrame(
             self.scrollable_frame, text="その他", font=("Arial", 10, "bold"), padx=15, pady=6
         )
-        frame_others.pack(fill=tk.X, padx=15, pady=(3, 10))
+        frame_others.pack(fill=tk.X, padx=15, pady=(3, 5))
 
-        # ボタンを横に並べるためのフレーム
         frame_others_btns = tk.Frame(frame_others)
         frame_others_btns.pack()
 
@@ -873,7 +873,98 @@ class FunabashiApp:
         )
         self.cancel_btn.pack(side=tk.LEFT, padx=10)
 
-    # 【追加機能2】ウィンドウ「×」ボタン押下時の安全終了処理
+        # 6. 利用者差し替え 枠
+        frame_replace = tk.LabelFrame(
+            self.scrollable_frame, text="利用者差し替え", font=("Arial", 10, "bold"), padx=15, pady=6
+        )
+        frame_replace.pack(fill=tk.X, padx=15, pady=(0, 10))
+
+        frame_replace_ids = tk.Frame(frame_replace)
+        frame_replace_ids.pack(fill=tk.X, pady=2)
+
+        # 入れ替え前
+        tk.Label(frame_replace_ids, text="入れ替え前 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
+        self.old_id_entry = tk.Entry(frame_replace_ids, width=12, font=("Arial", 9))
+        self.old_id_entry.pack(side=tk.LEFT, padx=2)
+        tk.Label(frame_replace_ids, text="PW:", font=("Arial", 9)).pack(side=tk.LEFT)
+        self.old_pw_entry = tk.Entry(frame_replace_ids, width=8, font=("Arial", 9))
+        self.old_pw_entry.insert(0, "000000")
+        self.old_pw_entry.pack(side=tk.LEFT, padx=(2, 15))
+
+        # 入れ替え後
+        tk.Label(frame_replace_ids, text="入れ替え後 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
+        self.new_id_entry = tk.Entry(frame_replace_ids, width=12, font=("Arial", 9))
+        self.new_id_entry.pack(side=tk.LEFT, padx=2)
+        tk.Label(frame_replace_ids, text="PW:", font=("Arial", 9)).pack(side=tk.LEFT)
+        self.new_pw_entry = tk.Entry(frame_replace_ids, width=8, font=("Arial", 9))
+        self.new_pw_entry.insert(0, "000000")
+        self.new_pw_entry.pack(side=tk.LEFT, padx=2)
+
+        # 対象グラウンド・日時選択枠
+        row_frame_rep = tk.Frame(frame_replace)
+        row_frame_rep.pack(fill=tk.X, pady=4)
+        tk.Label(row_frame_rep, text="対象:", font=("Arial", 9, "bold"), width=5, anchor="w").pack(side=tk.LEFT)
+
+        self.rep_ground_combo = ttk.Combobox(
+            row_frame_rep, values=ALL_GROUNDS, state="readonly", width=GROUND_COMBO_WIDTH
+        )
+        self.rep_ground_combo.set("行田運動広場")
+        self.rep_ground_combo.pack(side=tk.LEFT, padx=2)
+
+        self.rep_sub_combo = ttk.Combobox(row_frame_rep, state="readonly", width=SUB_FACILITY_COMBO_WIDTH)
+        self.rep_sub_combo.pack(side=tk.LEFT, padx=2)
+
+        tk.Label(row_frame_rep, text="日:", font=("Arial", 9)).pack(side=tk.LEFT, padx=(5, 1))
+
+        self.rep_year_combo = ttk.Combobox(row_frame_rep, values=YEAR_OPTIONS, state="readonly", width=6)
+        self.rep_year_combo.set(DEFAULT_YEAR_STR)
+        self.rep_year_combo.pack(side=tk.LEFT, padx=1)
+        tk.Label(row_frame_rep, text="年", font=("Arial", 9)).pack(side=tk.LEFT)
+
+        self.rep_month_combo = ttk.Combobox(row_frame_rep, values=MONTH_OPTIONS, state="readonly", width=4)
+        self.rep_month_combo.set(DEFAULT_MONTH_STR)
+        self.rep_month_combo.pack(side=tk.LEFT, padx=1)
+        tk.Label(row_frame_rep, text="月", font=("Arial", 9)).pack(side=tk.LEFT)
+
+        self.rep_day_combo = ttk.Combobox(row_frame_rep, values=DAY_OPTIONS, state="readonly", width=4)
+        self.rep_day_combo.set(DEFAULT_DAY_STR)
+        self.rep_day_combo.pack(side=tk.LEFT, padx=1)
+        tk.Label(row_frame_rep, text="日", font=("Arial", 9)).pack(side=tk.LEFT)
+
+        tk.Label(row_frame_rep, text="時:", font=("Arial", 9)).pack(side=tk.LEFT, padx=(5, 1))
+        self.rep_time_combo = ttk.Combobox(row_frame_rep, state="readonly", width=12)
+        self.rep_time_combo.pack(side=tk.LEFT, padx=2)
+
+        self.rep_ground_combo.bind("<<ComboboxSelected>>", self._on_rep_ground_combo_change)
+        self._on_rep_ground_combo_change(None)
+
+        frame_rep_btn = tk.Frame(frame_replace)
+        frame_rep_btn.pack(pady=(6, 3))
+        self.replace_btn = tk.Button(
+            frame_rep_btn,
+            text="利用者差し替え実行",
+            command=self.start_replace_process,
+            bg="#fd7e14",
+            fg="white",
+            font=("Arial", 12, "bold"),
+            width=20,
+        )
+        self.replace_btn.pack()
+
+    def _on_rep_ground_combo_change(self, event):
+        chosen_ground = self.rep_ground_combo.get()
+        sub_options = SUB_FACILITIES.get(chosen_ground, ["※詳細指定なし"])
+        self.rep_sub_combo["values"] = sub_options
+        self.rep_sub_combo.current(0)
+        if chosen_ground in SUB_FACILITIES:
+            self.rep_sub_combo.config(state="readonly")
+        else:
+            self.rep_sub_combo.config(state="disabled")
+
+        time_slots_dict = GROUND_TIME_SLOTS.get(chosen_ground, GROUND_TIME_SLOTS["行田運動広場"])
+        self.rep_time_combo["values"] = list(time_slots_dict.keys())
+        self.rep_time_combo.current(0)
+
     def _on_window_close(self):
         if self.is_running:
             if messagebox.askyesno(
@@ -889,12 +980,9 @@ class FunabashiApp:
         else:
             self.root.destroy()
 
-    # 【追加機能4】入力フォームの一括ロック・解除用関数
     def _toggle_ui_state(self, state: str):
-        """scrollable_frame内のウィジェットの有効/無効を一括切り替え"""
         def change_state(widget):
             try:
-                # TextとCanvasは無効化対象から外す（スクロールやログが見れなくなるため）
                 if not isinstance(widget, (tk.Text, tk.Canvas, ttk.Scrollbar, tk.Frame, tk.LabelFrame, tk.Label)):
                     widget.config(state=state)
             except tk.TclError:
@@ -904,23 +992,34 @@ class FunabashiApp:
         change_state(self.scrollable_frame)
 
     def _on_mousewheel(self, event):
-        self.main_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        if event.delta:
+            step = -1 if event.delta > 0 else 1
+            self.main_canvas.yview_scroll(step, "units")
+        return "break"
 
     def _on_id_mousewheel(self, event):
-        self.id_canvas.yview_scroll(int(-1 * (event.delta / 120)), "units")
+        if event.delta:
+            step = -1 if event.delta > 0 else 1
+            self.id_canvas.yview_scroll(step, "units")
+        return "break"
 
-    # 【追加機能3】非同期＆行数制限付きの安全なログ書き込み
+    def _on_global_mousewheel(self, event):
+        widget = event.widget
+        while widget is not None:
+            if widget in (self.id_canvas, self.id_container_frame):
+                return self._on_id_mousewheel(event)
+            widget = widget.master
+        return self._on_mousewheel(event)
+
     def append_log(self, text: str):
         self.log_queue.put(text)
 
     def _check_log_queue(self):
-        """キューからログを取り出し、テキストエリアを更新する（1000行制限付き）"""
         while not self.log_queue.empty():
             msg = self.log_queue.get_nowait()
             self.log_text.config(state=tk.NORMAL)
             self.log_text.insert(tk.END, msg + "\n")
 
-            # 行数が上限を超えたら古い行を削除
             num_lines = int(self.log_text.index("end-1c").split(".")[0])
             if num_lines > self.max_log_lines:
                 self.log_text.delete("1.0", f"{num_lines - self.max_log_lines}.0")
@@ -934,7 +1033,8 @@ class FunabashiApp:
         row_frame = tk.Frame(self.id_container_frame)
         row_frame.pack(fill=tk.X, pady=2)
 
-        tk.Label(row_frame, text=f"{row_idx+1}:", width=3, anchor="e", font=("Arial", 9)).pack(side=tk.LEFT)
+        row_label = tk.Label(row_frame, text=f"{row_idx+1}:", width=3, anchor="e", font=("Arial", 9))
+        row_label.pack(side=tk.LEFT)
 
         id_entry = tk.Entry(row_frame, width=14, font=("Arial", 9))
         if user_id:
@@ -947,11 +1047,42 @@ class FunabashiApp:
         pw_entry.pack(side=tk.LEFT, padx=2)
         self.pw_entries.append(pw_entry)
 
+        for widget in (row_frame, row_label, id_entry, pw_entry):
+            widget.bind("<MouseWheel>", self._on_id_mousewheel)
+        self.root.after_idle(self._refresh_id_scrollregion)
+
+    def _refresh_id_scrollregion(self):
+        bbox = self.id_canvas.bbox("all")
+        if bbox:
+            self.id_canvas.configure(scrollregion=bbox)
+
     def clear_id_rows(self):
         for widget in self.id_container_frame.winfo_children():
             widget.destroy()
         self.id_entries.clear()
         self.pw_entries.clear()
+        self.root.after_idle(self._refresh_id_scrollregion)
+
+    def clear_paste_entry(self):
+        self.paste_entry.delete(0, tk.END)
+        self.paste_entry.focus_set()
+
+    def show_paste_context_menu(self, event):
+        self.paste_entry.focus_set()
+        self.paste_entry.icursor(self.paste_entry.index(f"@{event.x}"))
+        try:
+            self.paste_context_menu.tk_popup(event.x_root, event.y_root)
+        finally:
+            self.paste_context_menu.grab_release()
+        return "break"
+
+    def paste_from_context_menu(self):
+        self.paste_entry.event_generate("<<Paste>>")
+
+    def clear_login_info(self):
+        self.clear_id_rows()
+        self.id_canvas.yview_moveto(0)
+        self.append_log("【通知】ログイン情報をクリアしました。")
 
     def reflect_ids(self):
         paste_text = self.paste_entry.get().strip()
@@ -1048,9 +1179,6 @@ class FunabashiApp:
                 credentials.append((user_id, password))
         return credentials
 
-    # ==========================================
-    # 統合・汎用スレッド実行エンジン
-    # ==========================================
     def _execute_task(self, task_name: str, folder_prefix: str, run_single_func, extra_args=(), create_folder: bool = True):
         if self.is_running:
             messagebox.showwarning("警告", "現在処理が実行中です。")
@@ -1064,7 +1192,6 @@ class FunabashiApp:
         self.is_stopped = False
         self.is_running = True
         
-        # 【追加機能4】 実行中はユーザーの誤操作を防ぐためにUIをロックする
         self._toggle_ui_state("disabled")
 
         use_headless = self.headless_var.get()
@@ -1166,7 +1293,6 @@ class FunabashiApp:
             self.driver = None
 
             self.is_running = False
-            # 【追加機能4】 処理終了時にUIロックを解除し、元の状態に戻す
             self.root.after(0, lambda: self._toggle_ui_state("normal"))
             self.root.after(0, self._restore_combobox_states)
 
@@ -1174,7 +1300,6 @@ class FunabashiApp:
                 self.root.after(0, self.stop_win.destroy)
 
     def _restore_combobox_states(self):
-        """UIロック解除後にコンボボックスを正しい状態（readonly）に復元する"""
         self.zoom_combo.config(state="readonly")
         self.people_combo.config(state="readonly")
         for i in range(4):
@@ -1183,11 +1308,16 @@ class FunabashiApp:
             self.month_combos[i].config(state="readonly")
             self.day_combos[i].config(state="readonly")
             self.time_combos[i].config(state="readonly")
-            # 枝番コンボボックスは選択内容によって状態を変える
             self._on_ground_combo_change(i)
+        
+        self.rep_ground_combo.config(state="readonly")
+        self.rep_year_combo.config(state="readonly")
+        self.rep_month_combo.config(state="readonly")
+        self.rep_day_combo.config(state="readonly")
+        self.rep_time_combo.config(state="readonly")
+        self._on_rep_ground_combo_change(None)
 
     def start_apply_process(self):
-        """【トリガー1】抽選申し込み実行"""
         requests_list = []
         for i in range(4):
             y = self.year_combos[i].get()
@@ -1227,7 +1357,6 @@ class FunabashiApp:
         )
 
     def start_result_check_process(self):
-        """【トリガー2】抽選結果確認実行"""
         def _result_task(bot, u_id, u_pw, idx):
             bot.run_single_id_result(u_id, u_pw, id_index=idx)
 
@@ -1239,7 +1368,6 @@ class FunabashiApp:
         )
 
     def start_cancel_process(self):
-        """【トリガー3】抽選申込み取消実行"""
         def _cancel_task(bot, u_id, u_pw, idx):
             bot.run_single_id_cancel(u_id, u_pw, id_index=idx)
 
@@ -1250,16 +1378,110 @@ class FunabashiApp:
             create_folder=False,
         )
 
+    # ==========================================
+    # 利用者差し替え機能の処理
+    # ==========================================
+    def start_replace_process(self):
+        old_id = self.old_id_entry.get().strip()
+        old_pw = self.old_pw_entry.get().strip()
+        new_id = self.new_id_entry.get().strip()
+        new_pw = self.new_pw_entry.get().strip()
+
+        if not old_id or not new_id:
+            messagebox.showwarning("警告", "入れ替え前・入れ替え後のIDを両方入力してください。")
+            return
+
+        if self.is_running:
+            messagebox.showwarning("警告", "現在処理が実行中です。")
+            return
+
+        self.is_stopped = False
+        self.is_running = True
+        self._toggle_ui_state("disabled")
+        
+        # 画面のUIから対象グラウンドを取得
+        rep_ground = self.rep_ground_combo.get()
+
+        thread = threading.Thread(
+            target=self._worker_replace_thread,
+            args=(old_id, old_pw, new_id, new_pw, rep_ground),
+            daemon=True,
+        )
+        thread.start()
+
+    def _worker_replace_thread(self, old_id, old_pw, new_id, new_pw, rep_ground):
+        self.append_log("🚀 利用者差し替え処理を開始します")
+        self.root.after(0, self.create_stop_floating_window)
+
+        edge_driver = None
+        chrome_driver = None
+
+        try:
+            # --- Edge (入れ替え前) ---
+            self.append_log("起動中: Edge (入れ替え前アカウント)")
+            edge_options = webdriver.EdgeOptions()
+            edge_options.add_experimental_option("detach", True)
+            edge_service = EdgeService()
+            if hasattr(subprocess, "CREATE_NO_WINDOW"):
+                edge_service.creation_flags = subprocess.CREATE_NO_WINDOW
+            edge_driver = webdriver.Edge(options=edge_options, service=edge_service)
+
+            bot_edge = FunabashiBot(
+                edge_driver, self.append_log, stop_checker=lambda: self.is_stopped, slow_mode=False
+            )
+            bot_edge.login(old_id, old_pw)
+            self.append_log(f"✅ Edgeログイン完了: {old_id}")
+            time.sleep(1)
+
+            # --- Chrome (入れ替え後) ---
+            self.append_log("起動中: Chrome (入れ替え後アカウント)")
+            chrome_options = webdriver.ChromeOptions()
+            chrome_options.add_experimental_option("detach", True)
+            chrome_service = ChromeService()
+            if hasattr(subprocess, "CREATE_NO_WINDOW"):
+                chrome_service.creation_flags = subprocess.CREATE_NO_WINDOW
+            chrome_driver = webdriver.Chrome(options=chrome_options, service=chrome_service)
+
+            bot_chrome = FunabashiBot(
+                chrome_driver, self.append_log, stop_checker=lambda: self.is_stopped, slow_mode=False
+            )
+            bot_chrome.login(new_id, new_pw)
+            self.append_log(f"✅ Chromeログイン完了: {new_id}")
+            
+            # --- 画面遷移の実行 ---
+            self.append_log(f"    画面遷移中（予約の申込み → 複合検索 → 館の選択 → {rep_ground}）...")
+            bot_chrome.navigate_to_replace_new_search(rep_ground)
+            self.append_log("    ✅ 画面遷移完了")
+            # ----------------------------------------
+
+            self.append_log("\n🎉 ブラウザの起動とログインが完了しました")
+            self.root.after(0, lambda: messagebox.showinfo("確認", "各ブラウザでログインと画面遷移が完了しました。\n手動で操作を続けてください。"))
+
+        except Exception as e:
+            clean_msg = clean_exception_msg(e)
+            self.append_log(f"⛔ エラー停止: {clean_msg}")
+            self.root.after(0, lambda msg=clean_msg: messagebox.showerror("エラー停止", f"エラーが発生しました:\n{msg}"))
+            
+            if edge_driver:
+                with contextlib.suppress(Exception): edge_driver.quit()
+            if chrome_driver:
+                with contextlib.suppress(Exception): chrome_driver.quit()
+        finally:
+            self.is_running = False
+            self.root.after(0, lambda: self._toggle_ui_state("normal"))
+            self.root.after(0, self._restore_combobox_states)
+            if self.stop_win and self.stop_win.winfo_exists():
+                self.root.after(0, self.stop_win.destroy)
+
 # ==========================================
 # エントリポイント
 # ==========================================
 if __name__ == "__main__":
     root = tk.Tk()
     
-    # 【追加機能1】起動前にライブラリチェックと自動インストールを実行
-    root.withdraw() # 一旦メイン画面を隠す
+    root.withdraw() 
     check_and_install_libraries(root)
-    root.deiconify() # チェックが終わったら表示する
+    root.deiconify() 
 
     app = FunabashiApp(root)
     root.mainloop()
