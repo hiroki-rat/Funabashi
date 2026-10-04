@@ -420,6 +420,11 @@ class FunabashiBot:
         # 部分一致でグラウンドを選択（表記ゆれにも対応）
         self._click_with_retry(By.PARTIAL_LINK_TEXT, ground_name)
         self.select_replace_search_date(target_date)
+        self.click_image_by_alt("検索開始")
+
+    def navigate_to_replace_old_cancel(self):
+        """利用者差し替え用に、入れ替え前アカウントの予約取消画面を開く。"""
+        self.click_image_by_alt("予約の取消")
 
     def select_replace_search_date(self, target_date: str):
         """利用者差し替え用の施設空き状況検索画面で年月日を設定する。"""
@@ -1487,6 +1492,9 @@ class FunabashiApp:
             )
             bot_edge.login(old_id, old_pw)
             self.append_log(f"✅ Edgeログイン完了: {old_id}")
+            self.append_log("    予約の取消画面へ移動中...")
+            bot_edge.navigate_to_replace_old_cancel()
+            self.append_log("    ✅ 予約の取消画面へ移動完了")
             time.sleep(1)
 
             # --- Chrome (入れ替え後) ---
@@ -1505,13 +1513,13 @@ class FunabashiApp:
             self.append_log(f"✅ Chromeログイン完了: {new_id}")
             
             # --- 画面遷移の実行 ---
-            self.append_log(f"    画面遷移中（予約の申込み → 複合検索 → 館の選択 → {rep_ground}）...")
+            self.append_log(f"    画面遷移中（予約の申込み → 複合検索 → 館の選択 → {rep_ground} → 検索開始）...")
             bot_chrome.navigate_to_replace_new_search(rep_ground, rep_date)
-            self.append_log(f"    ✅ 画面遷移・日付設定完了（{rep_date[:4]}年{rep_date[4:6]}月{rep_date[6:]}日）")
+            self.append_log(f"    ✅ 検索開始まで完了（{rep_date[:4]}年{rep_date[4:6]}月{rep_date[6:]}日）")
             # ----------------------------------------
 
             self.append_log("\n🎉 ブラウザの起動とログインが完了しました")
-            self.root.after(0, lambda: messagebox.showinfo("確認", "各ブラウザでログインと画面遷移が完了しました。\n手動で操作を続けてください。"))
+            self.root.after(0, lambda: messagebox.showinfo("確認", "各ブラウザで必要な画面まで移動しました。\n手動で操作を続けてください。"))
 
         except Exception as e:
             clean_msg = clean_exception_msg(e)
