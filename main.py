@@ -649,8 +649,8 @@ class FunabashiApp:
     def __init__(self, root: tk.Tk):
         self.root = root
         self.root.title("船橋市施設予約 抽選申込自動化ツール")
-        self.root.geometry("1120x700")
-        self.root.minsize(1080, 620)
+        self.root.geometry("1100x720")
+        self.root.minsize(980, 620)
 
         self.root.protocol("WM_DELETE_WINDOW", self._on_window_close)
 
@@ -939,11 +939,8 @@ class FunabashiApp:
         )
         frame_replace.pack(fill=tk.X, padx=15, pady=(0, 10))
 
-        frame_replace_content = tk.Frame(frame_replace)
-        frame_replace_content.pack(fill=tk.X, pady=2)
-
-        frame_replace_ids = tk.Frame(frame_replace_content)
-        frame_replace_ids.pack(side=tk.LEFT, padx=(0, 12))
+        frame_replace_ids = tk.Frame(frame_replace)
+        frame_replace_ids.pack(fill=tk.X, pady=(1, 4))
 
         # 差し替え前
         tk.Label(frame_replace_ids, text="差し替え前 ID:", font=("Arial", 9)).pack(side=tk.LEFT)
@@ -964,8 +961,8 @@ class FunabashiApp:
         self.new_pw_entry.pack(side=tk.LEFT, padx=2)
 
         # 対象グラウンド・日時選択枠
-        row_frame_rep = tk.Frame(frame_replace_content)
-        row_frame_rep.pack(side=tk.LEFT, padx=(0, 12))
+        row_frame_rep = tk.Frame(frame_replace)
+        row_frame_rep.pack(fill=tk.X, pady=(0, 1))
         tk.Label(row_frame_rep, text="対象:", font=("Arial", 9, "bold"), width=5, anchor="w").pack(side=tk.LEFT)
 
         self.rep_ground_combo = ttk.Combobox(
@@ -991,7 +988,7 @@ class FunabashiApp:
         self.rep_day_combo.pack(side=tk.LEFT, padx=1)
         tk.Label(row_frame_rep, text="日", font=("Arial", 9)).pack(side=tk.LEFT)
 
-        frame_rep_btn = tk.Frame(frame_replace_content)
+        frame_rep_btn = tk.Frame(row_frame_rep)
         frame_rep_btn.pack(side=tk.RIGHT, padx=(8, 0))
         self.replace_btn = tk.Button(
             frame_rep_btn,
