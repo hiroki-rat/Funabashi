@@ -420,7 +420,7 @@ class FunabashiBot:
         # 部分一致でグラウンドを選択（表記ゆれにも対応）
         self._click_with_retry(By.PARTIAL_LINK_TEXT, ground_name)
         self.select_replace_search_date(target_date)
-        self.click_image_by_alt("検索開始")
+        self.click_image_by_alt("検索を開始する")
 
     def navigate_to_replace_old_cancel(self):
         """利用者差し替え用に、入れ替え前アカウントの予約取消画面を開く。"""
