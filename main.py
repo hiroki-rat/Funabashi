@@ -992,7 +992,7 @@ class FunabashiApp:
         frame_rep_btn.pack(side=tk.RIGHT, padx=(8, 0))
         self.replace_btn = tk.Button(
             frame_rep_btn,
-            text="利用者差し替え実行",
+            text="差し替え用ログイン",
             command=self.start_replace_process,
             bg="#fd7e14",
             fg="white",
